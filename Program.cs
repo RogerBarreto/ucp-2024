@@ -308,7 +308,7 @@ examples.Add(async () => // Kernel with multiple chat completion services
 
 #endregion Examples
 
-await examples[^1](); // Run the last example
+await examples[^3](); // Run the last example
 
 Console.WriteLine("\n\n\n");
 

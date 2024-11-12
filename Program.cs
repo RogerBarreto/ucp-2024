@@ -3,10 +3,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Ollama;
+using Microsoft.SemanticKernel.Services;
 using OllamaSharp;
 using System.ComponentModel;
-
-#pragma warning disable SKEXP0001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 List<Func<Task>> examples = [];
 
@@ -22,6 +21,30 @@ examples.Add(async () => // Kernel prompting blocking (non-streaming)
         .Build();
 
     var response = await kernel.InvokePromptAsync("Hello, how are you?");
+
+    Console.WriteLine(response);
+});
+
+examples.Add(async () => // Service prompting blocking (IChatClient)
+{
+    var modelId = "llama3.2";
+    var endpoint = new Uri("http://localhost:11434");
+    var service = new OllamaApiClient(endpoint, modelId)
+        .AsChatCompletionService();
+
+    var response = await service.GetChatMessageContentAsync("Hello, how are you?");
+    Console.WriteLine(response);
+
+    Console.WriteLine("\n----\n");
+
+    // Normally usage of the service directly allows you to use specific modality types like
+    // Sending the chat history.
+    ChatHistory chatHistory = [
+        new ChatMessageContent(AuthorRole.System, "You are presenting in a conference, and your name is Roger Bot."),
+        new ChatMessageContent(AuthorRole.User, "Hello, how are you?")
+    ];
+
+    response = await service.GetChatMessageContentAsync(chatHistory);
 
     Console.WriteLine(response);
 });
@@ -205,6 +228,7 @@ examples.Add(async () => // Kernel prompting with function calling and stateful 
         ["name"] = "Roger"
     };
 
+    // Ollama only support function calling without streaming mode.
     var result = await kernel.InvokePromptAsync(myPrompt, arguments);
     Console.WriteLine(result);
 
@@ -212,9 +236,79 @@ examples.Add(async () => // Kernel prompting with function calling and stateful 
     Console.WriteLine(result);
 });
 
+examples.Add(async () => // Service prompting with function calling and stateful Plugins
+{
+    var myDescribedStatefulPlugin = new MyDescribedStatefulPlugin();
+    var modelId = "llama3.2";
+    var endpoint = new Uri("http://localhost:11434");
+    var kernelBuilder = Kernel.CreateBuilder();
+
+    var service = new ChatClientBuilder()
+            .UseFunctionInvocation()
+            .Use(new OllamaApiClient(endpoint, modelId))
+            .AsChatCompletionService();
+
+    var kernel = kernelBuilder.Build();
+    kernel.Plugins.AddFromObject(myDescribedStatefulPlugin);
+
+    var myPrompt = "Hello, I'm {{$name}}. Is the current count an even or an odd number and what is its number?";
+    var settings = new OllamaPromptExecutionSettings { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() };
+    var arguments = new KernelArguments(settings)
+    {
+        ["name"] = "Roger"
+    };
+
+    ChatHistory chatMessageContents = [
+        new ChatMessageContent(AuthorRole.User, myPrompt)
+    ];
+
+    // Ollama only support function calling without streaming mode.
+    var result = await service.GetChatMessageContentAsync(chatMessageContents, settings, kernel);
+    Console.WriteLine(result);
+
+    result = await service.GetChatMessageContentAsync(chatMessageContents, settings, kernel);
+    Console.WriteLine(result);
+});
+
+examples.Add(async () => // Kernel with multiple chat completion services
+{
+    var ollamaModelId = "llama3.2";
+    var ollamaEndpoint = new Uri("http://localhost:11434");
+    var fileModelId = "phi3";
+    var fileModelPath = "D:\\repo\\huggingface-models\\Phi-3-mini-4k-instruct-onnx\\cpu_and_mobile\\cpu-int4-rtn-block-32";
+    var kernelBuilder = Kernel.CreateBuilder();
+
+    kernelBuilder
+        .Services
+            .AddSingleton((sp) => new OllamaApiClient(ollamaEndpoint, ollamaModelId).AsChatCompletionService())
+            .AddOnnxRuntimeGenAIChatCompletion(fileModelId, fileModelPath);
+            // Last service will be the default service
+
+    var kernel = kernelBuilder.Build();
+
+    kernel.PromptRenderFilters.Add(new SelectedModelRenderFilter());
+
+    var modelNames = string.Join(", ", kernel.GetAllServices<IChatCompletionService>().Select(s => s.GetModelId()));
+
+    while (true)
+    {
+        Console.Write($"\n\nType one of the available models [{modelNames}] > ");
+        var selectedModel = Console.ReadLine();
+        Console.WriteLine();
+
+        if (string.IsNullOrEmpty(selectedModel)) break;
+
+        var settings = new PromptExecutionSettings { ModelId = selectedModel };
+        await foreach (var token in kernel.InvokePromptStreamingAsync("Answer in a small sentence, why does Jupiter have storms?", new(settings)))
+        {
+            Console.Write(token);
+        };
+    }
+});
+
 #endregion Examples
 
-await examples.Last()();
+await examples[^1](); // Run the last example
 
 Console.WriteLine("\n\n\n");
 
@@ -254,6 +348,19 @@ public class MyDescribedStatefulPlugin
     }
 }
 
+#endregion
+
+#region Filters
+
+public class SelectedModelRenderFilter : IPromptRenderFilter
+{
+    public async Task OnPromptRenderAsync(PromptRenderContext context, Func<PromptRenderContext, Task> next)
+    {
+        Console.WriteLine($"Settings model id: {context.Arguments.ExecutionSettings?.FirstOrDefault().Value.ModelId}");
+
+        await next(context);
+    }
+}
 #endregion
 
 public class CustomHttpClientHandler : HttpClientHandler

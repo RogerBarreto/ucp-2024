@@ -229,9 +229,11 @@ examples.Add(async () => // Kernel prompting with function calling and stateful 
     };
 
     // Ollama only support function calling without streaming mode.
+    Console.WriteLine("Processing...");
     var result = await kernel.InvokePromptAsync(myPrompt, arguments);
     Console.WriteLine(result);
 
+    Console.WriteLine("Processing..."); 
     result = await kernel.InvokePromptAsync(myPrompt, arguments);
     Console.WriteLine(result);
 });
@@ -251,21 +253,19 @@ examples.Add(async () => // Service prompting with function calling and stateful
     var kernel = kernelBuilder.Build();
     kernel.Plugins.AddFromObject(myDescribedStatefulPlugin);
 
-    var myPrompt = "Hello, I'm {{$name}}. Is the current count an even or an odd number and what is its number?";
+    var myPrompt = "Is the current count an even or an odd number and what is its number?";
     var settings = new OllamaPromptExecutionSettings { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() };
-    var arguments = new KernelArguments(settings)
-    {
-        ["name"] = "Roger"
-    };
 
     ChatHistory chatMessageContents = [
         new ChatMessageContent(AuthorRole.User, myPrompt)
     ];
 
     // Ollama only support function calling without streaming mode.
+    Console.WriteLine("Processing...");
     var result = await service.GetChatMessageContentAsync(chatMessageContents, settings, kernel);
     Console.WriteLine(result);
 
+    Console.WriteLine("Processing...");
     result = await service.GetChatMessageContentAsync(chatMessageContents, settings, kernel);
     Console.WriteLine(result);
 });
@@ -275,7 +275,7 @@ examples.Add(async () => // Kernel with multiple chat completion services
     var ollamaModelId = "llama3.2";
     var ollamaEndpoint = new Uri("http://localhost:11434");
     var fileModelId = "phi3";
-    var fileModelPath = "D:\\repo\\huggingface-models\\Phi-3-mini-4k-instruct-onnx\\cpu_and_mobile\\cpu-int4-rtn-block-32";
+    var fileModelPath = "E:\\repo\\huggingface\\Phi-3-mini-4k-instruct-onnx\\cpu_and_mobile\\cpu-int4-rtn-block-32";
     var kernelBuilder = Kernel.CreateBuilder();
 
     kernelBuilder
@@ -296,7 +296,7 @@ examples.Add(async () => // Kernel with multiple chat completion services
         var selectedModel = Console.ReadLine();
         Console.WriteLine();
 
-        if (string.IsNullOrEmpty(selectedModel)) break;
+        if (string.IsNullOrEmpty(selectedModel)) { break; }
 
         var settings = new PromptExecutionSettings { ModelId = selectedModel };
         await foreach (var token in kernel.InvokePromptStreamingAsync("Answer in a small sentence, why does Jupiter have storms?", new(settings)))
@@ -308,7 +308,7 @@ examples.Add(async () => // Kernel with multiple chat completion services
 
 #endregion Examples
 
-await examples[^3](); // Run the last example
+await examples[^1](); // Run the last example
 
 Console.WriteLine("\n\n\n");
 

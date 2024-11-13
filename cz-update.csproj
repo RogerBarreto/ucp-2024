@@ -6,8 +6,9 @@
         <RootNamespace>cz_update</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <NoWarn>IDE0211;SKEXP0070;SKEXP0001</NoWarn>
-    </PropertyGroup>
+        <NoWarn>IDE0211;SKEXP0070;SKEXP0001;SKEXP0010</NoWarn>
+      <UserSecretsId>22909f89-f951-48ca-8213-a52167318813</UserSecretsId>
+  </PropertyGroup>
 
     <ItemGroup>
       <Compile Remove="Step01.cs" />
@@ -20,8 +21,13 @@
         <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.1" />
         <PackageReference Include="Microsoft.SemanticKernel" Version="1.28.0" />
         <PackageReference Include="Microsoft.SemanticKernel.Connectors.Ollama" Version="1.28.0-alpha" />
-        <PackageReference Include="Microsoft.SemanticKernel.Connectors.Onnx" Version="1.28.0-alpha" />
+		<PackageReference Include="Microsoft.SemanticKernel.Connectors.Onnx" Version="1.28.0-alpha" />
+		<PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureAIInference" Version="1.28.0-alpha" />
 		<PackageReference Include="OllamaSharp" Version="4.0.5" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="simple-router\" />
     </ItemGroup>
 
 </Project>

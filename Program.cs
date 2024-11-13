@@ -1,11 +1,15 @@
 ﻿using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.AzureAIInference;
 using Microsoft.SemanticKernel.Connectors.Ollama;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.Services;
 using OllamaSharp;
 using System.ComponentModel;
+using System.Text;
 
 List<Func<Task>> examples = [];
 
@@ -306,6 +310,108 @@ examples.Add(async () => // Kernel with multiple chat completion services
     }
 });
 
+examples.Add(async () => // Multi modalities text -> audio services
+{
+    var config = new ConfigurationBuilder()
+        .AddUserSecrets<Program>()
+        .Build();
+
+    var chatService = new AzureAIInferenceChatCompletionService(
+        modelId: "phi3",
+        apiKey: config["AzureAIInference:ApiKey"]!, 
+        endpoint: new Uri(config["AzureAIInference:Endpoint"]!));
+
+    var textToAudioService = new OpenAITextToAudioService(
+        modelId: "tts-1", 
+        apiKey: config["OpenAI:ApiKey"]!);
+
+    StringBuilder answer = new();
+    await foreach (var token in chatService.GetStreamingChatMessageContentsAsync("Explain in a simple phrase why Jupiter has storms."))
+    {
+        Console.Write(token);
+        answer.Append(token);
+    }
+
+    Console.WriteLine("\nGenerating audio...\n");
+    var generatedAudios = await textToAudioService.GetAudioContentsAsync(answer.ToString());
+    var generatedAudio = generatedAudios[0];
+
+    var file = Path.Combine(Directory.GetCurrentDirectory(), "output.mp3");
+    await File.WriteAllBytesAsync(file, generatedAudio.Data!.Value);
+
+    Console.WriteLine($"\nAudio Generated. Ctrl + Click to listen: {new Uri(file).AbsoluteUri}");
+});
+
+examples.Add(async () => // Multi modalities audio -> text services
+{
+    var config = new ConfigurationBuilder()
+        .AddUserSecrets<Program>()
+        .Build();
+
+    string folderPath = @"C:\Users\rbarreto\OneDrive - Microsoft\Documents\Sound Recordings";
+
+    DirectoryInfo directoryInfo = new DirectoryInfo(folderPath);
+
+    // Get the most recent file created in the directory
+    FileInfo? mostRecentFile = directoryInfo.GetFiles()
+                                           .OrderByDescending(f => f.CreationTime)
+                                           .FirstOrDefault();
+
+    Console.WriteLine($"Most recent file: {mostRecentFile!.FullName}");
+
+    var audioContent = new Microsoft.SemanticKernel.AudioContent(File.ReadAllBytes(mostRecentFile!.FullName), "audio/m4a");
+
+    var audioToTextService = new OpenAIAudioToTextService(
+    modelId: "whisper-1",
+    apiKey: config["OpenAI:ApiKey"]!);
+
+    Console.WriteLine("\nGenerating text from audio ...\n");
+    var generatedTexts = await audioToTextService.GetTextContentsAsync(audioContent);
+    var generatedText = generatedTexts[0];
+
+    Console.WriteLine($"Text Generated: {generatedText}");
+});
+
+examples.Add(async () => // Multi modalities audio -> text -> image services
+{
+    var config = new ConfigurationBuilder()
+        .AddUserSecrets<Program>()
+        .Build();
+
+    string folderPath = @"C:\Users\rbarreto\OneDrive - Microsoft\Documents\Sound Recordings";
+
+    DirectoryInfo directoryInfo = new DirectoryInfo(folderPath);
+
+    // Get the most recent file created in the directory
+    FileInfo? mostRecentFile = directoryInfo.GetFiles()
+                                           .OrderByDescending(f => f.CreationTime)
+                                           .FirstOrDefault();
+
+    Console.WriteLine($"Most recent file: {mostRecentFile!.FullName}");
+
+    var audioContent = new Microsoft.SemanticKernel.AudioContent(File.ReadAllBytes(mostRecentFile!.FullName), "audio/m4a");
+
+    var audioToTextService = new OpenAIAudioToTextService(
+        modelId: "whisper-1",
+        apiKey: config["OpenAI:ApiKey"]!);
+
+    var textToImageService = new OpenAITextToImageService(
+    modelId: "dall-e-3",
+    apiKey: config["OpenAI:ApiKey"]!);
+
+    Console.WriteLine("\nGenerating text from audio ...\n");
+    var generatedTexts = await audioToTextService.GetTextContentsAsync(audioContent);
+    var generatedText = generatedTexts[0];
+
+    Console.WriteLine($"Text Generated: {generatedText}");
+
+    Console.WriteLine("\nGenerating image from text ...\n");
+    var generatedImages = await textToImageService.GetImageContentsAsync(generatedText);
+    var generatedImage = generatedImages[0];
+
+    Console.WriteLine("Image Generated. Ctrl + Click to view: " + generatedImage.Uri);
+});
+
 #endregion Examples
 
 await examples[^1](); // Run the last example
@@ -363,6 +469,7 @@ public class SelectedModelRenderFilter : IPromptRenderFilter
 }
 #endregion
 
+#region Debugging
 public class CustomHttpClientHandler : HttpClientHandler
 {
     protected async override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -373,3 +480,4 @@ public class CustomHttpClientHandler : HttpClientHandler
         return await base.SendAsync(request, cancellationToken);
     }
 }
+#endregion

@@ -15,10 +15,12 @@ using Microsoft.SemanticKernel.Services;
 using OllamaSharp;
 using OpenTelemetry;
 using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using System;
 using System.ComponentModel;
+using System.Security.Cryptography;
 using System.Text;
 
 List<Func<Task>> examples = [];
@@ -709,7 +711,7 @@ examples.Add(async () => // Open Telemetry Aspire Dashboard
 
     var resourceBuilder = ResourceBuilder
         .CreateDefault()
-        .AddService("TelemetryAspireDashboardQuickstart");
+        .AddService("CZUpdate-SemanticKernel-Telemetry");
 
     // Enable model diagnostics with sensitive data.
     AppContext.SetSwitch("Microsoft.SemanticKernel.Experimental.GenAI.EnableOTelDiagnosticsSensitive", true);
@@ -720,14 +722,11 @@ examples.Add(async () => // Open Telemetry Aspire Dashboard
         .AddOtlpExporter(options => options.Endpoint = new Uri(oTelExporterEndpoint))
         .Build();
 
-    var meterProvider = Sdk.CreateMeterProviderBuilder()
-        .AddMeter("Microsoft.SemanticKernel*");
-
-    /*
+    using var meterProvider = Sdk.CreateMeterProviderBuilder()
         .SetResourceBuilder(resourceBuilder)
         .AddMeter("Microsoft.SemanticKernel*")
         .AddOtlpExporter(options => options.Endpoint = new Uri(oTelExporterEndpoint))
-        .Build();*/
+        .Build();
 
     using var loggerFactory = LoggerFactory.Create(builder =>
     {
@@ -744,6 +743,7 @@ examples.Add(async () => // Open Telemetry Aspire Dashboard
     });
 
     builder.Services.AddSingleton(loggerFactory);
+    builder.Plugins.AddFromObject(new MyDescribedStatefulPlugin());
 
     builder.AddOpenAIChatCompletion(
         modelId: "gpt-4o-mini",
@@ -758,13 +758,16 @@ examples.Add(async () => // Open Telemetry Aspire Dashboard
         if (string.IsNullOrEmpty(userPrompt)) { break; }
 
         Console.Write("\nAssistant > ");
-        await foreach (var token in kernel.InvokePromptStreamingAsync(userPrompt))
-        {
-            Console.Write(token);
-        }
 
-        Console.WriteLine("\n");
+        var settings = new PromptExecutionSettings { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() };
+        var result = await kernel.InvokePromptAsync(userPrompt, new(settings));
+        Console.WriteLine(result);
     }
+});
+
+examples.Add(async () => // Open API as Plugins
+{
+
 });
 
 // Dependency Injection
@@ -783,7 +786,7 @@ examples.Add(async () => // Open Telemetry Aspire Dashboard
 
 #endregion Examples
 
-await examples[^6](); // Run the last example
+await examples[^1](); // Run the last example
 
 Console.WriteLine("\n\n\n");
 
@@ -818,6 +821,13 @@ public class MyDescribedStatefulPlugin
     public int GetCounter()
     {
         return this._counter++;
+    }
+
+
+    [KernelFunction, Description("Adds a random number to the counter")]
+    public void AddRandomToCounter()
+    {
+        this._counter += RandomNumberGenerator.GetInt32(1, 10);
     }
 }
 

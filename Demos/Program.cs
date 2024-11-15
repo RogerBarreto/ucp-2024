@@ -64,6 +64,27 @@ examples.Add(async () => // Kernel prompting streaming
     };
 });
 
+examples.Add(async () => // Kernel prompting streaming with DI
+{
+    var modelId = "llama3.2";
+    var endpoint = new Uri("http://localhost:11434");
+
+    var services = new ServiceCollection();
+    services
+        .AddKernel()
+            .AddOllamaChatCompletion(modelId, endpoint);
+
+    var serviceProvider = services.BuildServiceProvider();
+
+    var kernel = serviceProvider.GetRequiredService<Kernel>();
+    Console.WriteLine("=== Kernel prompting streaming ===\n\n");
+
+    await foreach (var token in kernel.InvokePromptStreamingAsync("Why is Neptune blue?"))
+    {
+        Console.Write(token);
+    };
+});
+
 examples.Add(async () => // Service prompting blocking
 {
     Console.WriteLine("=== Service prompting blocking ===\n\n");
@@ -930,8 +951,6 @@ examples.Add(async () => // Multi modalities audio -> text services -> audio
 
 });
 
-// Dependency Injection
-
 // Plugins within Plugins
 
 // Kernel within Plugins
@@ -944,7 +963,7 @@ examples.Add(async () => // Multi modalities audio -> text services -> audio
 
 #endregion Examples
 
-await examples[12](); // Run first example
+await examples[0](); // Run first example
 
 Console.WriteLine("\n\n\n");
 

@@ -142,11 +142,12 @@ examples.Add(async () => // Kernel prompting with Templated Prompt with Variable
         Temperature = 0.9f,
     };
 
-    var myPrompt = "Hello, I'm {{$name}}. What is my name?";
+    var myPrompt = "Hello, I'm {{$name}}, and I have {{$age}}. What is my name?";
 
     var arguments = new KernelArguments(settings)
     {
-        ["name"] = "Roger"
+        ["name"] = "Roger",
+        ["age"] = 30
     };
 
     await foreach (var token in kernel.InvokePromptStreamingAsync(myPrompt, arguments))
@@ -155,9 +156,9 @@ examples.Add(async () => // Kernel prompting with Templated Prompt with Variable
     }
 });
 
-examples.Add(async () => // Kernel prompting with Templated Prompt with Function Plugins
+examples.Add(async () => // Kernel prompting with Templated Prompt with Plugin Functions
 {
-    Console.WriteLine("=== Kernel prompting with Templated Prompt with Function Plugins ===\n\n");
+    Console.WriteLine("=== Kernel prompting with Templated Prompt with Plugin Functions ===\n\n");
 
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
@@ -226,7 +227,7 @@ examples.Add(async () => // Kernel prompting with Templated Prompt with Stateful
 {
     Console.WriteLine("=== Kernel prompting with Templated Prompt with Stateful Plugins ===\n\n");
 
-    var myStatefulPlugin = new MyStatefulPlugin();
+    var myStatefulPlugin = new MyStatefulPlugin(counter: 15);
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
     var kernel = Kernel.CreateBuilder()
@@ -255,16 +256,17 @@ examples.Add(async () => // Kernel prompting with function calling and stateful 
 {
     Console.WriteLine("=== Kernel prompting with function calling and stateful Plugins ===\n\n");
 
-    var myDescribedStatefulPlugin = new MyDescribedStatefulPlugin();
+    var myDescribedStatefulPlugin = new MyDescribedStatefulPlugin(isOn: true);
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
     var kernel = Kernel.CreateBuilder()
-        .AddOllamaChatCompletion(modelId)
+        .AddOllamaChatCompletion(modelId, endpoint)
         .Build();
 
     kernel.Plugins.AddFromObject(myDescribedStatefulPlugin);
+    kernel.PromptRenderFilters.Add(new EchoPromptRenderFilter());
 
-    var myPrompt = "Hello, I'm {{$name}}. Is the current count an even or an odd number and what is its number?";
+    var myPrompt = "Hello, I'm {{$name}}. Is the light or or off?";
     var settings = new OllamaPromptExecutionSettings { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() };
     var arguments = new KernelArguments(settings)
     {
@@ -276,7 +278,39 @@ examples.Add(async () => // Kernel prompting with function calling and stateful 
     var result = await kernel.InvokePromptAsync(myPrompt, arguments);
     Console.WriteLine(result);
 
+    myPrompt = "Please turn the light off please?";
     Console.WriteLine("Processing..."); 
+    result = await kernel.InvokePromptAsync(myPrompt, arguments);
+    Console.WriteLine(result);
+});
+
+examples.Add(async () => // Kernel prompting with function calling and stateful Plugins (OpenAI)
+{
+    Console.WriteLine("=== Kernel prompting with function calling and stateful Plugins (OpenAI) ===\n\n");
+
+    var myDescribedStatefulPlugin = new MyDescribedStatefulPlugin(isOn: true);
+    var modelId = "gpt-4o-mini";
+    var kernel = Kernel.CreateBuilder()
+        .AddOpenAIChatCompletion(modelId, apiKey: config["OpenAI:ApiKey"]!)
+        .Build();
+
+    kernel.Plugins.AddFromObject(myDescribedStatefulPlugin);
+    kernel.PromptRenderFilters.Add(new EchoPromptRenderFilter());
+
+    var myPrompt = "Hello, I'm {{$name}}. Is the light or or off?";
+    var settings = new OllamaPromptExecutionSettings { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() };
+    var arguments = new KernelArguments(settings)
+    {
+        ["name"] = "Roger"
+    };
+
+    // Ollama only support function calling without streaming mode.
+    Console.WriteLine("Processing...");
+    var result = await kernel.InvokePromptAsync(myPrompt, arguments);
+    Console.WriteLine(result);
+
+    myPrompt = "Please turn the light off please?";
+    Console.WriteLine("Processing...");
     result = await kernel.InvokePromptAsync(myPrompt, arguments);
     Console.WriteLine(result);
 });
@@ -286,30 +320,32 @@ examples.Add(async () => // Get Service from Kernel prompting with function call
     Console.WriteLine("=== Get Service from Kernel prompting with function calling and stateful Plugins ===\n\n");
 
     var myDescribedStatefulPlugin = new MyDescribedStatefulPlugin();
-    var modelId = "llama3.2";
+    var modelId = "gpt-4o-mini";
     var endpoint = new Uri("http://localhost:11434");
     var kernel = Kernel.CreateBuilder()
-        .AddOllamaChatCompletion(modelId, endpoint)
+        .AddOpenAIChatCompletion(modelId, apiKey: config["OpenAI:ApiKey"]!)
         .Build();
 
     kernel.Plugins.AddFromObject(myDescribedStatefulPlugin);
-    
+    kernel.PromptRenderFilters.Add(new EchoPromptRenderFilter());
+
     var service = kernel.GetRequiredService<IChatCompletionService>();
 
-    var myPrompt = "Is the current count an even or an odd number and what is its number?";
+    var myPrompt = "Is the light or or off?";
     var settings = new OllamaPromptExecutionSettings { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() };
 
-    ChatHistory chatMessageContents = [
+    ChatHistory chatHistory = [
         new ChatMessageContent(AuthorRole.User, myPrompt)
     ];
 
     // Ollama only support function calling without streaming mode.
     Console.WriteLine("Processing...");
-    var result = await service.GetChatMessageContentAsync(chatMessageContents, settings, kernel);
+    var result = await service.GetChatMessageContentAsync(chatHistory, settings, kernel);
     Console.WriteLine(result);
 
     Console.WriteLine("Processing...");
-    result = await service.GetChatMessageContentAsync(chatMessageContents, settings, kernel);
+    chatHistory.AddUserMessage("Please turn the light on");
+    result = await service.GetChatMessageContentAsync(chatHistory, settings, kernel);
     Console.WriteLine(result);
 });
 
@@ -368,6 +404,7 @@ examples.Add(async () => // Kernel simple chat model routing using model id
     var ollamaModelId = "llama3.2";
     var ollamaEndpoint = new Uri("http://localhost:11434");
     var fileModelId = "phi3";
+    // https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-onnx
     var fileModelPath = "E:\\repo\\huggingface\\Phi-3-mini-4k-instruct-onnx\\cpu_and_mobile\\cpu-int4-rtn-block-32";
     var kernelBuilder = Kernel.CreateBuilder();
 
@@ -418,7 +455,6 @@ examples.Add(async () => // Kernel simple chat model routing using service id
                 serviceId: "onnx", 
                 modelId: fileModelId, 
                 modelPath: fileModelPath);
-    // Last service will be the default service
 
     var kernel = kernelBuilder.Build();
 
@@ -456,6 +492,9 @@ examples.Add(async () => // Kernel AI routing
         .AddOnnxRuntimeGenAIChatCompletion(fileModelId, fileModelPath)
         .AddOpenAIChatCompletion(openAIModelId, config["OpenAI:ApiKey"]!);
 
+    var kernel = kernelBuilder.Build();
+    kernel.PromptRenderFilters.Add(new SelectedModelRenderFilter());
+
     // Last service will be the default service
 
     StringBuilder systemPrompt = new("""
@@ -480,9 +519,9 @@ examples.Add(async () => // Kernel AI routing
 
     async Task<string> GetModelForPromptAsync(string prompt, string systemPrompt)
     {
-        var routerService = new OpenAIChatCompletionService(
-            modelId: "gpt-4o-mini",
-            apiKey: config["OpenAI:ApiKey"]!);
+        var routerService = kernel.GetAllServices<IChatCompletionService>()
+            .OfType<OpenAIChatCompletionService>()
+            .First();
 
         ChatHistory chatHistory = [
             new ChatMessageContent(AuthorRole.System, systemPrompt),
@@ -496,10 +535,6 @@ examples.Add(async () => // Kernel AI routing
 
         return selectedModel.ToString();
     }
-
-    var kernel = kernelBuilder.Build();
-
-    kernel.PromptRenderFilters.Add(new SelectedModelRenderFilter());
 
     var modelNames = string.Join(", ", kernel.GetAllServices<IChatCompletionService>().Select(s => s.GetModelId()));
 
@@ -605,6 +640,73 @@ examples.Add(async () => // Kernel Embeddings Routing
     }
 });
 
+examples.Add(async () => // Open Telemetry Aspire Dashboard 
+{
+    Console.WriteLine("=== Open Telemetry Aspire Dashboard ===\n\n");
+
+    // https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/dashboard/standalone?tabs=bash#start-the-dashboard
+    // docker run --rm -it -d -p 18888:18888 -p 4317:18889 --name aspire-dashboard mcr.microsoft.com/dotnet/aspire-dashboard:9.0
+
+    var builder = Kernel.CreateBuilder();
+
+    var oTelExporterEndpoint = "http://localhost:4317";
+
+    var resourceBuilder = ResourceBuilder
+        .CreateDefault()
+        .AddService("CZUpdate-SemanticKernel-Telemetry");
+
+    // Enable model diagnostics with sensitive data.
+    AppContext.SetSwitch("Microsoft.SemanticKernel.Experimental.GenAI.EnableOTelDiagnosticsSensitive", true);
+
+    using var traceProvider = Sdk.CreateTracerProviderBuilder()
+        .SetResourceBuilder(resourceBuilder)
+        .AddSource("Microsoft.SemanticKernel*")
+        .AddOtlpExporter(options => options.Endpoint = new Uri(oTelExporterEndpoint))
+        .Build();
+
+    using var meterProvider = Sdk.CreateMeterProviderBuilder()
+        .SetResourceBuilder(resourceBuilder)
+        .AddMeter("Microsoft.SemanticKernel*")
+        .AddOtlpExporter(options => options.Endpoint = new Uri(oTelExporterEndpoint))
+        .Build();
+
+    using var loggerFactory = LoggerFactory.Create(builder =>
+    {
+        // Add OpenTelemetry as a logging provider
+        builder.AddOpenTelemetry(options =>
+        {
+            options.SetResourceBuilder(resourceBuilder);
+            options.AddOtlpExporter(options => options.Endpoint = new Uri(oTelExporterEndpoint));
+            // Format log messages. This is default to false.
+            options.IncludeFormattedMessage = true;
+            options.IncludeScopes = true;
+        });
+        builder.SetMinimumLevel(LogLevel.Information);
+    });
+
+    builder.Services.AddSingleton(loggerFactory);
+    builder.Plugins.AddFromObject(new MyDescribedStatefulPlugin());
+
+    builder.AddOpenAIChatCompletion(
+        modelId: "gpt-4o-mini",
+        apiKey: config["OpenAI:ApiKey"]!);
+
+    Kernel kernel = builder.Build();
+
+    while (true)
+    {
+        Console.Write("User > ");
+        var userPrompt = Console.ReadLine();
+        if (string.IsNullOrEmpty(userPrompt)) { break; }
+
+        Console.Write("\nAssistant > ");
+
+        var settings = new PromptExecutionSettings { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() };
+        var result = await kernel.InvokePromptAsync(userPrompt, new(settings));
+        Console.WriteLine(result);
+    }
+});
+
 examples.Add(async () => // Multi modalities text -> audio services
 {
     Console.WriteLine("=== Multi modalities text -> audio services ===\n\n");
@@ -612,15 +714,17 @@ examples.Add(async () => // Multi modalities text -> audio services
     var chatService = new Azure.AI.Inference.ChatCompletionsClient(
         endpoint: new Uri(config["AzureAIInference:Endpoint"]!),
         credential: new Azure.AzureKeyCredential(config["AzureAIInference:ApiKey"]!))
-    .AsChatClient("phi3")
-    .AsChatCompletionService();
+        .AsChatClient("phi3")
+        .AsChatCompletionService();
 
     var textToAudioService = new OpenAITextToAudioService(
         modelId: "tts-1", 
         apiKey: config["OpenAI:ApiKey"]!);
 
     StringBuilder answer = new();
-    await foreach (var token in chatService.GetStreamingChatMessageContentsAsync("Explain in a simple phrase why Jupiter has storms."))
+    var prompt = "Explain in a simple phrase why Jupiter has storms.";
+    Console.WriteLine($"{prompt}\nGenerating response...\n");
+    await foreach (var token in chatService.GetStreamingChatMessageContentsAsync(prompt))
     {
         Console.Write(token);
         answer.Append(token);
@@ -634,34 +738,6 @@ examples.Add(async () => // Multi modalities text -> audio services
     await File.WriteAllBytesAsync(file, generatedAudio.Data!.Value);
 
     Console.WriteLine($"\nAudio Generated. Ctrl + Click to listen: {new Uri(file).AbsoluteUri}");
-});
-
-examples.Add(async () => // Multi modalities audio -> text services
-{
-    Console.WriteLine("=== Multi modalities audio -> text services ===\n\n");
-
-    string folderPath = @"C:\Users\rbarreto\OneDrive - Microsoft\Documents\Sound Recordings";
-
-    DirectoryInfo directoryInfo = new(folderPath);
-
-    // Get the most recent file created in the directory
-    FileInfo? mostRecentFile = directoryInfo.GetFiles()
-                                           .OrderByDescending(f => f.CreationTime)
-                                           .FirstOrDefault();
-
-    Console.WriteLine($"Most recent file: {mostRecentFile!.FullName}");
-
-    var audioContent = new Microsoft.SemanticKernel.AudioContent(File.ReadAllBytes(mostRecentFile!.FullName), "audio/m4a");
-
-    var audioToTextService = new OpenAIAudioToTextService(
-    modelId: "whisper-1",
-    apiKey: config["OpenAI:ApiKey"]!);
-
-    Console.WriteLine("\nGenerating text from audio ...\n");
-    var generatedTexts = await audioToTextService.GetTextContentsAsync(audioContent);
-    var generatedText = generatedTexts[0];
-
-    Console.WriteLine($"Text Generated: {generatedText}");
 });
 
 examples.Add(async () => // Multi modalities audio -> text -> image services
@@ -755,76 +831,82 @@ examples.Add(async () => // Multi modalities image -> text -> audio)
     Console.WriteLine($"\nOpenAI Audio Description. Ctrl + Click to listen: \n{new Uri(file2).AbsoluteUri}");
 });
 
-examples.Add(async () => // Open Telemetry Aspire Dashboard 
+examples.Add(async () => // Multi modalities audio -> text services
 {
-    Console.WriteLine("=== Open Telemetry Aspire Dashboard ===\n\n");
+    Console.WriteLine("=== Multi modalities audio -> text services ===\n\n");
 
-    // https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/dashboard/standalone?tabs=bash#start-the-dashboard
-    // docker run --rm -it -d -p 18888:18888 -p 4317:18889 --name aspire-dashboard mcr.microsoft.com/dotnet/aspire-dashboard:9.0
+    string folderPath = @"C:\Users\rbarreto\OneDrive - Microsoft\Documents\Sound Recordings";
 
-    var builder = Kernel.CreateBuilder();
+    DirectoryInfo directoryInfo = new(folderPath);
 
-    var oTelExporterEndpoint = "http://localhost:4317";
+    // Get the most recent file created in the directory
+    FileInfo? mostRecentFile = directoryInfo.GetFiles()
+                                           .OrderByDescending(f => f.CreationTime)
+                                           .FirstOrDefault();
 
-    var resourceBuilder = ResourceBuilder
-        .CreateDefault()
-        .AddService("CZUpdate-SemanticKernel-Telemetry");
+    Console.WriteLine($"Most recent file: {mostRecentFile!.FullName}");
 
-    // Enable model diagnostics with sensitive data.
-    AppContext.SetSwitch("Microsoft.SemanticKernel.Experimental.GenAI.EnableOTelDiagnosticsSensitive", true);
+    var audioContent = new Microsoft.SemanticKernel.AudioContent(File.ReadAllBytes(mostRecentFile!.FullName), "audio/m4a");
 
-    using var traceProvider = Sdk.CreateTracerProviderBuilder()
-        .SetResourceBuilder(resourceBuilder)
-        .AddSource("Microsoft.SemanticKernel*")
-        .AddOtlpExporter(options => options.Endpoint = new Uri(oTelExporterEndpoint))
-        .Build();
+    var audioToTextService = new OpenAIAudioToTextService(
+    modelId: "whisper-1",
+    apiKey: config["OpenAI:ApiKey"]!);
 
-    using var meterProvider = Sdk.CreateMeterProviderBuilder()
-        .SetResourceBuilder(resourceBuilder)
-        .AddMeter("Microsoft.SemanticKernel*")
-        .AddOtlpExporter(options => options.Endpoint = new Uri(oTelExporterEndpoint))
-        .Build();
+    Console.WriteLine("\nGenerating text from audio ...\n");
+    var generatedTexts = await audioToTextService.GetTextContentsAsync(audioContent);
+    var generatedText = generatedTexts[0];
 
-    using var loggerFactory = LoggerFactory.Create(builder =>
-    {
-        // Add OpenTelemetry as a logging provider
-        builder.AddOpenTelemetry(options =>
-        {
-            options.SetResourceBuilder(resourceBuilder);
-            options.AddOtlpExporter(options => options.Endpoint = new Uri(oTelExporterEndpoint));
-            // Format log messages. This is default to false.
-            options.IncludeFormattedMessage = true;
-            options.IncludeScopes = true;
-        });
-        builder.SetMinimumLevel(LogLevel.Information);
-    });
-
-    builder.Services.AddSingleton(loggerFactory);
-    builder.Plugins.AddFromObject(new MyDescribedStatefulPlugin());
-
-    builder.AddOpenAIChatCompletion(
-        modelId: "gpt-4o-mini",
-        apiKey: config["OpenAI:ApiKey"]!);
-
-    Kernel kernel = builder.Build();
-
-    while (true)
-    {
-        Console.Write("User > ");
-        var userPrompt = Console.ReadLine();
-        if (string.IsNullOrEmpty(userPrompt)) { break; }
-
-        Console.Write("\nAssistant > ");
-
-        var settings = new PromptExecutionSettings { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() };
-        var result = await kernel.InvokePromptAsync(userPrompt, new(settings));
-        Console.WriteLine(result);
-    }
+    Console.WriteLine($"Text Generated: {generatedText}");
 });
 
-examples.Add(async () => // Open API as Plugins
+examples.Add(async () => // Multi modalities audio -> text services -> audio
 {
-    await Task.Delay(0);
+    Console.WriteLine("=== Multi modalities audio -> text services ===\n\n");
+
+    string folderPath = @"C:\Users\rbarreto\OneDrive - Microsoft\Documents\Sound Recordings";
+
+    DirectoryInfo directoryInfo = new(folderPath);
+
+    // Get the most recent file created in the directory
+    FileInfo? mostRecentFile = directoryInfo.GetFiles()
+                                           .OrderByDescending(f => f.CreationTime)
+                                           .FirstOrDefault();
+
+    Console.WriteLine($"Most recent file: {mostRecentFile!.FullName}");
+
+    var audioContent = new Microsoft.SemanticKernel.AudioContent(File.ReadAllBytes(mostRecentFile!.FullName), "audio/m4a");
+
+    var audioToTextService = new OpenAIAudioToTextService(
+    modelId: "whisper-1",
+    apiKey: config["OpenAI:ApiKey"]!);
+
+    Console.WriteLine("\nGenerating text from audio ...\n");
+    var generatedTexts = await audioToTextService.GetTextContentsAsync(audioContent);
+    var generatedText = generatedTexts[0].ToString();
+
+    Console.WriteLine($"Text from Audio Generated: {generatedText}");
+
+    var chatService = new Azure.AI.Inference.ChatCompletionsClient(
+    endpoint: new Uri(config["AzureAIInference:Endpoint"]!),
+    credential: new Azure.AzureKeyCredential(config["AzureAIInference:ApiKey"]!))
+    .AsChatClient("phi3")
+    .AsChatCompletionService();
+
+    var response = await chatService.GetChatMessageContentAsync(generatedText);
+
+    Console.WriteLine($"\nAI Model Generated Text:\n {response}");
+
+    var textToAudioService = new OpenAITextToAudioService(
+        modelId: "tts-1",
+        apiKey: config["OpenAI:ApiKey"]!);
+
+    var generatedAudio = (await textToAudioService.GetAudioContentsAsync(response.ToString()!))[0];
+
+    var file = Path.Combine(Directory.GetCurrentDirectory(), "output.mp3");
+    await File.WriteAllBytesAsync(file, generatedAudio.Data!.Value);
+
+    Console.WriteLine($"\nAudio Generated. Ctrl + Click to listen: {new Uri(file).AbsoluteUri}");
+
 });
 
 // Dependency Injection
@@ -843,7 +925,7 @@ examples.Add(async () => // Open API as Plugins
 
 #endregion Examples
 
-await examples[4](); // Run the last example
+await examples[22](); // Run first example
 
 Console.WriteLine("\n\n\n");
 
@@ -854,13 +936,19 @@ public class MyStatelessPlugin
     [KernelFunction]
     public static string GetTime()
     {
-        return DateTime.UtcNow.ToString("R");
+        var currentTime = DateTime.UtcNow.ToString("R");
+        return currentTime;
     }
 }
 
 public class MyStatefulPlugin
 {
-    private int _counter = 0;
+    private int _counter;
+
+    public MyStatefulPlugin(int counter)
+    {
+        this._counter = counter;
+    }
 
     [KernelFunction]
     public int GetCounter()
@@ -869,21 +957,24 @@ public class MyStatefulPlugin
     }
 }
 
-public class MyDescribedStatefulPlugin
+[Description("This is a light bulb")]
+public class MyDescribedStatefulPlugin(bool isOn = false)
 {
-    private int _counter = 0;
-
-    [KernelFunction, Description("Current count number")]
-    [return: Description("The current count number")]
-    public int GetCounter()
+    private bool _isOn = isOn;
+    [KernelFunction, Description("Turns the light bulb on")]
+    public void TurnOn()
     {
-        return this._counter++;
+        this._isOn = true;
     }
-
-    [KernelFunction, Description("Adds a random number to the counter")]
-    public void AddRandomToCounter()
+    [KernelFunction, Description("Turns the light bulb off")]
+    public void TurnOff()
     {
-        this._counter += RandomNumberGenerator.GetInt32(1, 10);
+        this._isOn = false;
+    }
+    [KernelFunction, Description("Checks if the light bulb is on")]
+    public bool IsOn()
+    {
+        return this._isOn;
     }
 }
 
@@ -899,6 +990,15 @@ public class SelectedModelRenderFilter : IPromptRenderFilter
         Console.WriteLine($"Settings model id: {context.Arguments.ExecutionSettings?.FirstOrDefault().Value.ModelId ?? "--"}");
 
         await next(context);
+    }
+}
+
+public class EchoPromptRenderFilter : IPromptRenderFilter
+{
+    public async Task OnPromptRenderAsync(PromptRenderContext context, Func<PromptRenderContext, Task> next)
+    {
+        await next(context);
+        Console.WriteLine($"User Prompt: {context.RenderedPrompt}\n");
     }
 }
 #endregion

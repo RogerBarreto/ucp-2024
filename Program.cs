@@ -30,6 +30,9 @@ var config = new ConfigurationBuilder().AddUserSecrets<Program>().Build();
 
 examples.Add(async () => // Kernel prompting blocking (non-streaming)
 {
+    // https://ollama.com/blog/ollama-is-now-available-as-an-official-docker-image
+    // docker run -d -e OLLAMA_KEEP_ALIVE=-1 -v D:\temp\ollama:/root/.ollama -p 11434:11434 --name ollama ollama/ollama
+
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
 
@@ -786,7 +789,7 @@ examples.Add(async () => // Open API as Plugins
 
 #endregion Examples
 
-await examples[^1](); // Run the last example
+await examples[0](); // Run the last example
 
 Console.WriteLine("\n\n\n");
 

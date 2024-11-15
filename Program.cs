@@ -18,7 +18,6 @@ using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
-using System;
 using System.ComponentModel;
 using System.Security.Cryptography;
 using System.Text;
@@ -45,6 +44,21 @@ examples.Add(async () => // Kernel prompting blocking (non-streaming)
     Console.WriteLine(response);
 });
 
+examples.Add(async () => // Kernel prompting streaming
+{
+    var modelId = "llama3.2";
+    var endpoint = new Uri("http://localhost:11434");
+
+    var kernel = Kernel.CreateBuilder()
+        .AddOllamaChatCompletion(modelId, endpoint)
+        .Build();
+
+    await foreach (var token in kernel.InvokePromptStreamingAsync("Why is Neptune blue?"))
+    {
+        Console.Write(token);
+    };
+});
+
 examples.Add(async () => // Service prompting blocking (IChatClient Microsoft AI Abstractions)
 {
     var modelId = "llama3.2";
@@ -64,21 +78,7 @@ examples.Add(async () => // Service prompting blocking (IChatClient Microsoft AI
         new ChatMessageContent(AuthorRole.User, "Hello, how are you?")
     ];
 
-    response = await service.GetChatMessageContentAsync(chatHistory);
-
-    Console.WriteLine(response);
-});
-
-examples.Add(async () => // Kernel prompting streaming
-{
-    var modelId = "llama3.2";
-    var endpoint = new Uri("http://localhost:11434");
-
-    var kernel = Kernel.CreateBuilder()
-        .AddOllamaChatCompletion(modelId, endpoint)
-        .Build();
-
-    await foreach (var token in kernel.InvokePromptStreamingAsync("Why is Neptune blue?"))
+    await foreach (var token in service.GetStreamingChatMessageContentsAsync("Why is Neptune blue?"))
     {
         Console.Write(token);
     };

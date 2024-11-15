@@ -951,16 +951,6 @@ examples.Add(async () => // Multi modalities audio -> text services -> audio
 
 });
 
-// Plugins within Plugins
-
-// Kernel within Plugins
-
-// Auto function filtering
-
-// Prompt injection, PII filtering
-
-// Function result filtering
-
 #endregion Examples
 
 await examples[0](); // Run first example

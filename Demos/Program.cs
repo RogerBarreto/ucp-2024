@@ -11,6 +11,7 @@ using Microsoft.SemanticKernel.Connectors.Ollama;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.Data;
 using Microsoft.SemanticKernel.Embeddings;
+using Microsoft.SemanticKernel.Plugins.OpenApi;
 using Microsoft.SemanticKernel.Services;
 using OllamaSharp;
 using OpenTelemetry;
@@ -166,12 +167,12 @@ examples.Add(async () => // Kernel prompting with Templated Prompt with Plugin F
         .AddOllamaChatCompletion(modelId, endpoint)
         .Build();
 
-    string GetTime()
+    string GetDateTime()
     {
         return DateTime.UtcNow.ToString("R");
     }
 
-    var myFunction = KernelFunctionFactory.CreateFromMethod(GetTime, "GetTime");
+    var myFunction = KernelFunctionFactory.CreateFromMethod(GetDateTime, "GetDateTime");
     kernel.Plugins.AddFromFunctions("MyPlugin", [myFunction]);
 
     var settings = new OllamaPromptExecutionSettings
@@ -179,7 +180,7 @@ examples.Add(async () => // Kernel prompting with Templated Prompt with Plugin F
         TopP = 0.9f,
         Temperature = 0.9f,
     };
-    var myPrompt = "Hello, I'm {{$name}}, and current time now is {{GetTime}}. What day is today?";
+    var myPrompt = "Hello, I'm {{$name}}, and current date and time now is {{GetDateTime}}. What day is today?";
     var arguments = new KernelArguments(settings)
     {
         ["name"] = "Roger"
@@ -211,7 +212,7 @@ examples.Add(async () => // Kernel prompting with Templated Prompt with Stateles
         Temperature = 0.9f,
     };
 
-    var myPrompt = "Hello, I'm {{$name}}, and current time now is {{GetTime}}. What day is today?";
+    var myPrompt = "Hello, I'm {{$name}}, and current date and time now is {{GetDateTime}}. What day is today?";
     var arguments = new KernelArguments(settings)
     {
         ["name"] = "Roger"
@@ -349,7 +350,27 @@ examples.Add(async () => // Get Service from Kernel prompting with function call
     Console.WriteLine(result);
 });
 
-examples.Add(async () => // Embeddings Service
+examples.Add(async () => // Kernel prompting with Open API Plugins
+{
+    var kernel = Kernel.CreateBuilder()
+        .AddOpenAIChatCompletion("gpt-4o-mini", config["OpenAI:ApiKey"]!)
+        .Build();
+    var executionParameters = new OpenApiFunctionExecutionParameters();
+
+    var openApiUri = new Uri("https://localhost:7299/swagger/v1/swagger.json");
+    var plugin = await OpenApiKernelPluginFactory.CreateFromOpenApiAsync("WeatherService", openApiUri, executionParameters);
+    kernel.Plugins.Add(plugin);
+    kernel.Plugins.AddFromType<MyStatelessPlugin>(); // Enable AI to know which day is today
+
+    // var listResult = await plugin["GetWeatherForecast"].InvokeAsync(kernel);
+
+    var settings = new PromptExecutionSettings { FunctionChoiceBehavior = FunctionChoiceBehavior.Auto() };
+    var result = await kernel.InvokePromptAsync("What is the weather forecast for tomorrow? Ensure you check which day is today.", new(settings));
+
+    Console.WriteLine(result);
+});
+
+examples.Add(async () => // Using Embeddings & Search Services 
 {
     Console.WriteLine("=== Embeddings Service ===\n\n");
 
@@ -921,11 +942,9 @@ examples.Add(async () => // Multi modalities audio -> text services -> audio
 
 // Function result filtering
 
-// Open API plugins
-
 #endregion Examples
 
-await examples[22](); // Run first example
+await examples[12](); // Run first example
 
 Console.WriteLine("\n\n\n");
 
@@ -934,7 +953,7 @@ Console.WriteLine("\n\n\n");
 public class MyStatelessPlugin
 {
     [KernelFunction]
-    public static string GetTime()
+    public static string GetDateTime()
     {
         var currentTime = DateTime.UtcNow.ToString("R");
         return currentTime;

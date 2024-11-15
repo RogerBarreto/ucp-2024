@@ -29,6 +29,8 @@ var config = new ConfigurationBuilder().AddUserSecrets<Program>().Build();
 
 examples.Add(async () => // Kernel prompting blocking (non-streaming)
 {
+    Console.WriteLine("=== Kernel prompting blocking (non-streaming) ===\n\n");
+
     // https://ollama.com/blog/ollama-is-now-available-as-an-official-docker-image
     // docker run -d -e OLLAMA_KEEP_ALIVE=-1 -v D:\temp\ollama:/root/.ollama -p 11434:11434 --name ollama ollama/ollama
 
@@ -46,6 +48,8 @@ examples.Add(async () => // Kernel prompting blocking (non-streaming)
 
 examples.Add(async () => // Kernel prompting streaming
 {
+    Console.WriteLine("=== Kernel prompting streaming ===\n\n");
+
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
 
@@ -59,26 +63,42 @@ examples.Add(async () => // Kernel prompting streaming
     };
 });
 
+examples.Add(async () => // Service prompting blocking
+{
+    Console.WriteLine("=== Service prompting blocking ===\n\n");
+
+    var modelId = "gpt-4o-mini";
+    var endpoint = new Uri("http://localhost:11434");
+    var service = new OpenAIChatCompletionService(modelId, config["OpenAI:ApiKey"]!);
+
+    // Normally usage of the service directly allows you to use specific modality types like
+    // Sending the chat history.
+    ChatHistory chatHistory = [
+        new ChatMessageContent(AuthorRole.System, "You are presenting in a conference, your name is Roger Bot and you should introduce yourself before starting to answer the questions."),
+        new ChatMessageContent(AuthorRole.User, "Why is Neptune blue?")
+    ];
+
+    await foreach (var token in service.GetStreamingChatMessageContentsAsync(chatHistory))
+    {
+        Console.Write(token);
+    };
+});
+
 examples.Add(async () => // Service prompting blocking (IChatClient Microsoft AI Abstractions)
 {
+    Console.WriteLine("=== Service prompting blocking (IChatClient Microsoft AI Abstractions) ===\n\n");
+
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
     var service = new OllamaApiClient(endpoint, modelId)
         .AsChatCompletionService();
 
-    var response = await service.GetChatMessageContentAsync("Hello, how are you?");
-    Console.WriteLine(response);
-
-    Console.WriteLine("\n----\n");
-
-    // Normally usage of the service directly allows you to use specific modality types like
-    // Sending the chat history.
     ChatHistory chatHistory = [
-        new ChatMessageContent(AuthorRole.System, "You are presenting in a conference, and your name is Roger Bot."),
-        new ChatMessageContent(AuthorRole.User, "Hello, how are you?")
+        new ChatMessageContent(AuthorRole.System, "You are presenting in a conference, your name is Roger Bot and you should introduce yourself before starting to answer the questions."),
+        new ChatMessageContent(AuthorRole.User, "Why is Neptune blue?")
     ];
 
-    await foreach (var token in service.GetStreamingChatMessageContentsAsync("Why is Neptune blue?"))
+    await foreach (var token in service.GetStreamingChatMessageContentsAsync(chatHistory))
     {
         Console.Write(token);
     };
@@ -86,6 +106,8 @@ examples.Add(async () => // Service prompting blocking (IChatClient Microsoft AI
 
 examples.Add(async () => // Kernel prompting with custom settings
 {
+    Console.WriteLine("=== Kernel prompting with custom settings ===\n\n");
+
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
 
@@ -95,8 +117,7 @@ examples.Add(async () => // Kernel prompting with custom settings
 
     var settings = new OllamaPromptExecutionSettings
     {
-        TopP = 0.9f,
-        Temperature = 0.9f,
+        Temperature = 0.9f
     };
 
     await foreach (var token in kernel.InvokePromptStreamingAsync("Why does Jupiter has storms?", new(settings)))
@@ -106,7 +127,9 @@ examples.Add(async () => // Kernel prompting with custom settings
 });
 
 examples.Add(async () => // Kernel prompting with Templated Prompt with Variables
-{                        
+{
+    Console.WriteLine("=== Kernel prompting with Templated Prompt with Variables ===\n\n");
+
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
     var kernel = Kernel.CreateBuilder()
@@ -134,6 +157,8 @@ examples.Add(async () => // Kernel prompting with Templated Prompt with Variable
 
 examples.Add(async () => // Kernel prompting with Templated Prompt with Function Plugins
 {
+    Console.WriteLine("=== Kernel prompting with Templated Prompt with Function Plugins ===\n\n");
+
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
     var kernel = Kernel.CreateBuilder()
@@ -167,6 +192,8 @@ examples.Add(async () => // Kernel prompting with Templated Prompt with Function
 
 examples.Add(async () => // Kernel prompting with Templated Prompt with Stateless Plugin
 {
+    Console.WriteLine("=== Kernel prompting with Templated Prompt with Stateless Plugin ===\n\n");
+
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
     var kernelBuilder = Kernel.CreateBuilder()
@@ -197,6 +224,8 @@ examples.Add(async () => // Kernel prompting with Templated Prompt with Stateles
 
 examples.Add(async () => // Kernel prompting with Templated Prompt with Stateful Plugins
 {
+    Console.WriteLine("=== Kernel prompting with Templated Prompt with Stateful Plugins ===\n\n");
+
     var myStatefulPlugin = new MyStatefulPlugin();
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
@@ -224,6 +253,8 @@ examples.Add(async () => // Kernel prompting with Templated Prompt with Stateful
 
 examples.Add(async () => // Kernel prompting with function calling and stateful Plugins
 {
+    Console.WriteLine("=== Kernel prompting with function calling and stateful Plugins ===\n\n");
+
     var myDescribedStatefulPlugin = new MyDescribedStatefulPlugin();
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
@@ -252,6 +283,8 @@ examples.Add(async () => // Kernel prompting with function calling and stateful 
 
 examples.Add(async () => // Get Service from Kernel prompting with function calling and stateful Plugins
 {
+    Console.WriteLine("=== Get Service from Kernel prompting with function calling and stateful Plugins ===\n\n");
+
     var myDescribedStatefulPlugin = new MyDescribedStatefulPlugin();
     var modelId = "llama3.2";
     var endpoint = new Uri("http://localhost:11434");
@@ -282,6 +315,8 @@ examples.Add(async () => // Get Service from Kernel prompting with function call
 
 examples.Add(async () => // Embeddings Service
 {
+    Console.WriteLine("=== Embeddings Service ===\n\n");
+
     var embeddingModelId = "mxbai-embed-large";
     var endpoint = new Uri("http://localhost:11434");
     var embeddingService = new EmbeddingGeneratorBuilder<string, Embedding<float>>()
@@ -328,6 +363,8 @@ examples.Add(async () => // Embeddings Service
 
 examples.Add(async () => // Kernel simple chat model routing using model id
 {
+    Console.WriteLine("=== Kernel simple chat model routing using model id ===\n\n");
+
     var ollamaModelId = "llama3.2";
     var ollamaEndpoint = new Uri("http://localhost:11434");
     var fileModelId = "phi3";
@@ -363,6 +400,8 @@ examples.Add(async () => // Kernel simple chat model routing using model id
 
 examples.Add(async () => // Kernel simple chat model routing using service id
 {
+    Console.WriteLine("=== Kernel simple chat model routing using service id ===\n\n");
+
     var ollamaModelId = "llama3.2";
     var ollamaEndpoint = new Uri("http://localhost:11434");
     var fileModelId = "phi3";
@@ -403,6 +442,8 @@ examples.Add(async () => // Kernel simple chat model routing using service id
 
 examples.Add(async () => // Kernel AI routing
 {
+    Console.WriteLine("=== Kernel AI routing ===\n\n");
+
     var ollamaModelId = "llama3.2";
     var ollamaEndpoint = new Uri("http://localhost:11434");
     var fileModelId = "phi3";
@@ -481,6 +522,8 @@ examples.Add(async () => // Kernel AI routing
 
 examples.Add(async () => // Kernel Embeddings Routing
 {
+    Console.WriteLine("=== Kernel Embeddings Routing ===\n\n");
+
     var ollamaModelId = "llama3.2";
     var ollamaEndpoint = new Uri("http://localhost:11434");
     var fileModelId = "phi3";
@@ -564,6 +607,8 @@ examples.Add(async () => // Kernel Embeddings Routing
 
 examples.Add(async () => // Multi modalities text -> audio services
 {
+    Console.WriteLine("=== Multi modalities text -> audio services ===\n\n");
+
     var chatService = new Azure.AI.Inference.ChatCompletionsClient(
         endpoint: new Uri(config["AzureAIInference:Endpoint"]!),
         credential: new Azure.AzureKeyCredential(config["AzureAIInference:ApiKey"]!))
@@ -593,6 +638,8 @@ examples.Add(async () => // Multi modalities text -> audio services
 
 examples.Add(async () => // Multi modalities audio -> text services
 {
+    Console.WriteLine("=== Multi modalities audio -> text services ===\n\n");
+
     string folderPath = @"C:\Users\rbarreto\OneDrive - Microsoft\Documents\Sound Recordings";
 
     DirectoryInfo directoryInfo = new(folderPath);
@@ -619,6 +666,8 @@ examples.Add(async () => // Multi modalities audio -> text services
 
 examples.Add(async () => // Multi modalities audio -> text -> image services
 {
+    Console.WriteLine("=== Multi modalities audio -> text -> image services ===\n\n");
+
     string folderPath = @"C:\Users\rbarreto\OneDrive - Microsoft\Documents\Sound Recordings";
 
     DirectoryInfo directoryInfo = new(folderPath);
@@ -655,6 +704,8 @@ examples.Add(async () => // Multi modalities audio -> text -> image services
 
 examples.Add(async () => // Multi modalities image -> text -> audio)
 {
+    Console.WriteLine("=== Multi modalities image -> text -> audio ===\n\n");
+
     string folderPath = @"C:\Users\rbarreto\OneDrive - Microsoft\Pictures\Camera Roll";
     string huggingFaceModel = "Salesforce/blip-image-captioning-large";
     string openAIModel = "gpt-4o-mini";
@@ -706,6 +757,9 @@ examples.Add(async () => // Multi modalities image -> text -> audio)
 
 examples.Add(async () => // Open Telemetry Aspire Dashboard 
 {
+    Console.WriteLine("=== Open Telemetry Aspire Dashboard ===\n\n");
+
+    // https://learn.microsoft.com/en-us/dotnet/aspire/fundamentals/dashboard/standalone?tabs=bash#start-the-dashboard
     // docker run --rm -it -d -p 18888:18888 -p 4317:18889 --name aspire-dashboard mcr.microsoft.com/dotnet/aspire-dashboard:9.0
 
     var builder = Kernel.CreateBuilder();
@@ -789,7 +843,7 @@ examples.Add(async () => // Open API as Plugins
 
 #endregion Examples
 
-await examples[0](); // Run the last example
+await examples[4](); // Run the last example
 
 Console.WriteLine("\n\n\n");
 

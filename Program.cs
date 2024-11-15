@@ -767,7 +767,7 @@ examples.Add(async () => // Open Telemetry Aspire Dashboard
 
 examples.Add(async () => // Open API as Plugins
 {
-
+    await Task.Delay(0);
 });
 
 // Dependency Injection
@@ -822,7 +822,6 @@ public class MyDescribedStatefulPlugin
     {
         return this._counter++;
     }
-
 
     [KernelFunction, Description("Adds a random number to the counter")]
     public void AddRandomToCounter()
